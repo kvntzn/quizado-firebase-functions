@@ -4,10 +4,15 @@ const admin = require('firebase-admin');
 const { firestore } = require('firebase-admin');
 admin.initializeApp();
 
-exports.helloWorld = functions.https.onRequest((request, response) => {
-  functions.logger.info("Hello logs!", {structuredData: true});
-  response.send("Hello from Firebase!");
-});
+//user signup
+exports.newUserSignup = functions.auth.user().onCreate((user) => {
+    
+    return admin.firestore().collection('Users').doc(user.uid).set({
+        email: user.email,
+        image: user.photoURL,
+        name: user.displayName
+    })
+})
 
 // firestore triggers
 exports.logActivities = functions.firestore.document('/{collection}/{id}')
@@ -30,17 +35,28 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
         return null;
     })
 
-exports.scheduledFunction = functions.pubsub.schedule('every 5 minutes')
-    .onRun(async (snap, context) => {
-        console.log('This will be run every 5 minutes!');
+// firestore triggers
+exports.updateRecommendations = functions.firestore.document('/Results/{id}')
+    .onCreate((snap, context) => {
+        console.log(snap.data())
 
-        // const feed = admin.firestore().collection('feed').collection('trends');
+        const collection = context.params.Results;
+        const id = context.params.id;
 
-        // const quizzes = admin.firestore().collection('Results')
-        // const collection = await quizzes.get();
+        const feeds = admin.firestore().collection('feeds');
+        const mostPopular  = feeds.collection('mostPopular');
         
-        // collection.docs.forEach(doc => {
-        //     doc.get()
-            
-        // });
-    });
+        var userRecommendations = feeds.doc(id).collection('recommedations');
+
+        // get quiz list
+        const quizzes = admin.firestore().collection('QuizList').orderBy('category',snap.get('category')).limit(4).get();
+        quizzes.forEach(it => {
+            userRecommendations.add(it)
+        });
+        // foreach quiz add them to userREcommendations
+
+
+        return null;
+    })
+
+
