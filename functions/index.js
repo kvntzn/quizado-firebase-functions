@@ -36,27 +36,42 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
     })
 
 // firestore triggers
-exports.updateRecommendations = functions.firestore.document('/Results/{id}')
-    .onCreate((snap, context) => {
+exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
+    .onWrite((snap, context) => {
         console.log(snap.data())
 
         const collection = context.params.Results;
         const id = context.params.id;
 
         const feeds = admin.firestore().collection('feeds');
-        const mostPopular  = feeds.collection('mostPopular');
-        
         var userRecommendations = feeds.doc(id).collection('recommedations');
 
-        // get quiz list
-        const quizzes = admin.firestore().collection('QuizList').orderBy('category',snap.get('category')).limit(4).get();
-        quizzes.forEach(it => {
-            userRecommendations.add(it)
-        });
-        // foreach quiz add them to userREcommendations
+        // try{
+        //     userRecommendations.listDocuments().then(val => {
+        //         val.map((val) => {
+        //             val.delete()
+        //         });
+        //     })
+        // }catch(ex){
+        //     console.log(ex);
+        // }
 
+        const quizzes = admin.firestore().collection('QuizList').orderBy('category',snap.get('category')).limit(4).get()
+        quizzes.then(val => {
+            console.log(val);
 
-        return null;
-    })
+            val.forEach(doc => {
+                console.log(doc);
+
+                userRecommendations.add(doc);
+            })
+
+            return null;
+        }).catch(error => { console.log (error); })
+
+        return feeds;
+    });
+ 
+    
 
 
