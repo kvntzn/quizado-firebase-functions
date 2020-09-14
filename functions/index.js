@@ -38,7 +38,7 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
 // firestore triggers
 exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
     .onWrite((snap, context) => {
-        console.log(snap.data())
+        console.log(snap.before, snap.after)
 
         const collection = context.params.Results;
         const id = context.params.id;
@@ -56,13 +56,15 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         //     console.log(ex);
         // }
 
-        const quizzes = admin.firestore().collection('QuizList').orderBy('category',snap.get('category')).limit(4).get()
+        // var doc = snap.after.data();
+        const quizzes = admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
         quizzes.then(val => {
             console.log(val);
 
             val.forEach(doc => {
                 console.log(doc);
 
+                // TODO : add
                 userRecommendations.add(doc);
             })
 
