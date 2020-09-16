@@ -59,18 +59,15 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         // var doc = snap.after.data();
         const quizzes = admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
         quizzes.then(val => {
-            console.log(val);
-
             val.forEach(doc => {
-                console.log(doc);
-
-                // TODO : add
-                userRecommendations.add(doc);
+                console.log(doc.data());
+                userRecommendations.add(doc.data());
             })
 
             return null;
         }).catch(error => { console.log (error); })
 
+        console.log(feeds);
         return feeds;
     });
  
