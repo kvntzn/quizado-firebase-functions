@@ -39,7 +39,6 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
 exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
     .onWrite((snap, context) => {
         console.log(snap.before, snap.after)
-
         const collection = context.params.Results;
         const id = context.params.id;
 
