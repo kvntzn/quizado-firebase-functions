@@ -39,25 +39,43 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
 exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
     .onWrite((snap, context) => {
         console.log(snap.before, snap.after)
-        const collection = context.params.Results;
         const id = context.params.id;
 
         const feeds = admin.firestore().collection('feeds');
-        var userRecommendations = feeds.doc(id).collection('recommedations');
+        const userRecommendations = feeds.doc(id).collection('recommedations');
+        const popularQuizzes = feeds.doc(id).collection('popular');
 
-        // try{
-        //     userRecommendations.listDocuments().then(val => {
-        //         val.map((val) => {
-        //             val.delete()
-        //         });
-        //     })
-        // }catch(ex){
-        //     console.log(ex);
-        // }
+        const topQuizzes = admin.firestore().collection('QuizList').orderBy('taken', 'asc' ).limit(4).get()
 
-        // var doc = snap.after.data();
-        const quizzes = admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
-        quizzes.then(val => {
+        // remove existing
+        topQuizzes.then(val => {
+            return val.map((val) => {
+                val.delete()
+            })
+        }).catch(error => { console.log (error); });
+
+        // add updated
+        topQuizzes.then(val => {
+            val.forEach(doc => {
+                console.log(doc.data());
+                popularQuizzes.add(doc.data());
+            })
+
+            return null;
+        }).catch(error => { console.log (error); })
+   
+        // TODO: get results category var doc = snap.after.data();
+        const quizRecommendation = admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
+
+        // remove existing
+        quizRecommendation.then(val => {
+            return val.map((val) => {
+                val.delete()
+            })
+        }).catch(error => { console.log (error); });
+
+        // add updated
+        quizRecommendation.then(val => {
             val.forEach(doc => {
                 console.log(doc.data());
                 userRecommendations.add(doc.data());
