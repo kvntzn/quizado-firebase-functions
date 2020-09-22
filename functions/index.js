@@ -38,27 +38,44 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
 // firestore triggers
 exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
     .onWrite(async (snap, context) => {
-        console.log(snap.before, snap.after)
         const id = context.params.id;
+        const quizId = context.params.quizId;
 
-        const feeds = admin.firestore().collection('feeds');
+        const db = admin.firestore();
+        const quizList = db.collection('QuizList');
+
+        await quizList.doc(quizId).update({
+            taken : admin.firestore.FieldValue.increment(1)
+        })
+
+        const userResults = db.collection('Users').doc(id).collection('results');
+        userResults.doc(quizId).set({score: snap.after.data().correct })
+
+        console.log(snap.before.data().correct - snap.after.data().correct)
+        const difference = (snap.before.data().correct - snap.after.data().correct) * -1; 
+        db.collection('leaderboard').doc(id).update({
+            score : admin.firestore.FieldValue.increment(difference)
+        });
+
+        // Recommendations
+        const feeds = db.collection('feeds');
         const userRecommendations = feeds.doc(id).collection('recommedations');
         const popularQuizzes = feeds.doc(id).collection('popular');
 
-        await deleteQueryBatch(admin.firestore(), popularQuizzes);
-        await deleteQueryBatch(admin.firestore(), userRecommendations);
+        await deleteQueryBatch(db, popularQuizzes);
+        await deleteQueryBatch(db, userRecommendations);
 
-        const topQuizzes = await admin.firestore().collection('QuizList').orderBy('taken', 'asc' ).limit(4).get()
+        const topQuizzes = await quizList.orderBy('taken', 'asc' ).limit(4).get()
         topQuizzes.forEach(doc => {
             popularQuizzes.add(doc.data());
-        })
+        });
 
         // TODO : based on the results category
-        const quizRecommendation = await admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
+        const quizRecommendation = await quizList.orderBy('category', 'asc' ).limit(4).get()
         quizRecommendation.forEach(doc => {
             userRecommendations.add(doc.data());
-        })
-        
+        });
+
         console.log(feeds);
         return feeds;
     });
