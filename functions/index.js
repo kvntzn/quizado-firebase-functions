@@ -37,7 +37,7 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
 
 // firestore triggers
 exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
-    .onWrite((snap, context) => {
+    .onWrite(async (snap, context) => {
         console.log(snap.before, snap.after)
         const id = context.params.id;
 
@@ -45,49 +45,46 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         const userRecommendations = feeds.doc(id).collection('recommedations');
         const popularQuizzes = feeds.doc(id).collection('popular');
 
-        const topQuizzes = admin.firestore().collection('QuizList').orderBy('taken', 'asc' ).limit(4).get()
+        await deleteQueryBatch(admin.firestore(), popularQuizzes);
+        await deleteQueryBatch(admin.firestore(), userRecommendations);
 
-        // remove existing
-        topQuizzes.then(val => {
-            return val.map((val) => {
-                val.delete()
-            })
-        }).catch(error => { console.log (error); });
+        const topQuizzes = await admin.firestore().collection('QuizList').orderBy('taken', 'asc' ).limit(4).get()
+        topQuizzes.forEach(doc => {
+            popularQuizzes.add(doc.data());
+        })
 
-        // add updated
-        topQuizzes.then(val => {
-            val.forEach(doc => {
-                console.log(doc.data());
-                popularQuizzes.add(doc.data());
-            })
-
-            return null;
-        }).catch(error => { console.log (error); })
-   
-        // TODO: get results category var doc = snap.after.data();
-        const quizRecommendation = admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
-
-        // remove existing
-        quizRecommendation.then(val => {
-            return val.map((val) => {
-                val.delete()
-            })
-        }).catch(error => { console.log (error); });
-
-        // add updated
-        quizRecommendation.then(val => {
-            val.forEach(doc => {
-                console.log(doc.data());
-                userRecommendations.add(doc.data());
-            })
-
-            return null;
-        }).catch(error => { console.log (error); })
-
+        // TODO : based on the results category
+        const quizRecommendation = await admin.firestore().collection('QuizList').orderBy('category', 'asc' ).limit(4).get()
+        quizRecommendation.forEach(doc => {
+            userRecommendations.add(doc.data());
+        })
+        
         console.log(feeds);
         return feeds;
     });
- 
+
+async function deleteQueryBatch(db, query) {
+    const snapshot = await query.get();
     
+    const batchSize = snapshot.size;
+    if (batchSize === 0) {
+        // When there are no documents left, we are done
+        return;
+    }
+    
+    // Delete documents in a batch
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
+    
+    // Recurse on the next process tick, to avoid
+    // exploding the stack.
+    process.nextTick(() => {
+        deleteQueryBatch(db, query);
+    });
+}
+
 
 
