@@ -5,7 +5,7 @@ const { firestore } = require('firebase-admin');
 admin.initializeApp();
 
 //user signup
-exports.newUserSignup = functions.auth.user().onCreate((user) => {
+exports.newUserSignupAuth = functions.auth.user().onCreate((user) => {
     
     return admin.firestore().collection('Users').doc(user.uid).set({
         email: user.email,
@@ -36,6 +36,21 @@ exports.logActivities = functions.firestore.document('/{collection}/{id}')
     })
 
 // firestore triggers
+exports.newUserSignup = functions.firestore.document('/Users/{id}')
+    .onCreate(async (snap, context) => {
+        const id = context.params.id;
+        const db = admin.firestore();
+
+        const feeds = db.collection('feeds');
+        const quizList = db.collection('QuizList');
+        const userRecommendations = feeds.doc(id).collection('recommedations');
+        const popularQuizzes = feeds.doc(id).collection('popular');
+
+        await populateUserFeed(quizList, popularQuizzes, userRecommendations, null);
+        return feeds;
+    })
+
+// firestore triggers
 exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/Results/{id}')
     .onWrite(async (snap, context) => {
         const id = context.params.id;
@@ -51,7 +66,7 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         const userResults = db.collection('Users').doc(id).collection('results');
         userResults.doc(quizId).set({score: snap.after.data().correct })
 
-        console.log(snap.before.data().correct - snap.after.data().correct)
+        console.log(snap.before.data().correct, snap.after.data().correct)
         const difference = (snap.before.data().correct - snap.after.data().correct) * -1; 
         db.collection('leaderboard').doc(id).update({
             score : admin.firestore.FieldValue.increment(difference)
@@ -65,18 +80,7 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         await deleteQueryBatch(db, popularQuizzes);
         await deleteQueryBatch(db, userRecommendations);
 
-        const topQuizzes = await quizList.orderBy('taken', 'asc' ).limit(4).get()
-        topQuizzes.forEach(doc => {
-            popularQuizzes.add(doc.data());
-        });
-
-        // TODO : based on the results category
-        const quizRecommendation = await quizList.orderBy('category', 'asc' ).limit(4).get()
-        quizRecommendation.forEach(doc => {
-            userRecommendations.add(doc.data());
-        });
-
-        console.log(feeds);
+        await populateUserFeed(quizList, popularQuizzes, userRecommendations, snap.after.data().quiz_category);
         return feeds;
     });
 
@@ -100,6 +104,19 @@ async function deleteQueryBatch(db, query) {
     // exploding the stack.
     process.nextTick(() => {
         deleteQueryBatch(db, query);
+    });
+}
+
+async function populateUserFeed(quizList, popularQuizzes, userRecommendations, recentResult){
+    const topQuizzes = await quizList.orderBy('taken', 'asc' ).limit(4).get()
+    topQuizzes.forEach(doc => {
+        popularQuizzes.add(doc.data());
+    });
+
+    console.log(recentResult);
+    const quizRecommendation = !recentResult ? await quizList.orderBy('category', 'asc').startAfter(recentResult).limit(4).get() :  await quizList.orderBy('category', 'asc' ).limit(4).get();
+    quizRecommendation.forEach(doc => {
+        userRecommendations.add(doc.data());
     });
 }
 
