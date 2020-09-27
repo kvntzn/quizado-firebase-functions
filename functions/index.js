@@ -44,9 +44,8 @@ exports.newUserSignup = functions.firestore.document('/Users/{id}')
         const feeds = db.collection('feeds');
         const quizList = db.collection('QuizList');
         const userRecommendations = feeds.doc(id).collection('recommedations');
-        const popularQuizzes = feeds.doc(id).collection('popular');
 
-        await populateUserFeed(quizList, popularQuizzes, userRecommendations, null);
+        await populateUserFeed(quizList, userRecommendations, null);
         return feeds;
     })
 
@@ -55,32 +54,38 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
     .onWrite(async (snap, context) => {
         const id = context.params.id;
         const quizId = context.params.quizId;
-
         const db = admin.firestore();
-        const quizList = db.collection('QuizList');
 
+        console.log( snap.before.data());
+        console.log( snap.after.data());
+        
+        // Recommendations
+        const feeds = db.collection('feeds');
+        const userRecommendations = feeds.doc(id).collection('recommedations');
+        await deleteQueryBatch(db, userRecommendations);
+
+        // Score
+        const currentScore = snap.after.data().correct;
+        const oldScore = snap.before.data().correct;
+
+        const quizList = db.collection('QuizList');
         await quizList.doc(quizId).update({
             taken : admin.firestore.FieldValue.increment(1)
         })
 
-        const userResults = db.collection('Users').doc(id).collection('results');
-        userResults.doc(quizId).set({score: snap.after.data().correct })
+        const userDoc = db.collection('Users').doc(id);
+        const userResults = userDoc.collection('results');
+        userResults.doc(quizId).set({score:  currentScore})
 
-        console.log(snap.before.data().correct, snap.after.data().correct)
-        const difference = (snap.before.data().correct - snap.after.data().correct) * -1; 
-        db.collection('leaderboard').doc(id).update({
+        const user = await userDoc.get();
+        console.log(oldScore, currentScore)
+        const difference = (oldScore - currentScore) * -1; 
+        db.collection('leaderboard').doc(id).set({
+            name : user.data().name,
             score : admin.firestore.FieldValue.increment(difference)
         });
 
-        // Recommendations
-        const feeds = db.collection('feeds');
-        const userRecommendations = feeds.doc(id).collection('recommedations');
-        const popularQuizzes = feeds.doc(id).collection('popular');
-
-        await deleteQueryBatch(db, popularQuizzes);
-        await deleteQueryBatch(db, userRecommendations);
-
-        await populateUserFeed(quizList, popularQuizzes, userRecommendations, snap.after.data().quiz_category);
+        await populateUserFeed(quizList, userRecommendations, snap.after.data().quiz_category);
         return feeds;
     });
 
@@ -107,16 +112,22 @@ async function deleteQueryBatch(db, query) {
     });
 }
 
-async function populateUserFeed(quizList, popularQuizzes, userRecommendations, recentResult){
-    const topQuizzes = await quizList.orderBy('taken', 'asc' ).limit(4).get()
-    topQuizzes.forEach(doc => {
-        popularQuizzes.add(doc.data());
-    });
-
-    console.log(recentResult);
+async function populateUserFeed(quizList, userRecommendations, recentResult){
+    let rankRecommendation = 0;
     const quizRecommendation = !recentResult ? await quizList.orderBy('category', 'asc').startAfter(recentResult).limit(4).get() :  await quizList.orderBy('category', 'asc' ).limit(4).get();
     quizRecommendation.forEach(doc => {
-        userRecommendations.add(doc.data());
+        const quizData = doc.data();
+        userRecommendations.doc(doc.id).set({
+            category : quizData.category,
+            desc : quizData.desc,
+            image : quizData.image,
+            level : quizData.level,
+            name : quizData.name,
+            taken : quizData.taken,
+            rankRecommendation : rankRecommendation
+        })
+
+        rankRecommendation++;
     });
 }
 
