@@ -65,8 +65,8 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         await deleteQueryBatch(db, userRecommendations);
 
         // Score
-        const currentScore = snap.after.data().correct;
-        const oldScore = snap.before.data().correct;
+        const currentScore = !snap.after.data() ? snap.after.data().correct : 0;
+        const oldScore = !snap.before.data() ? snap.after.data().correct : 0;
 
         const quizList = db.collection('QuizList');
         await quizList.doc(quizId).update({
@@ -124,6 +124,7 @@ async function populateUserFeed(quizList, userRecommendations, recentResult){
             level : quizData.level,
             name : quizData.name,
             taken : quizData.taken,
+            questions: quizData.questions,
             rankRecommendation : rankRecommendation
         })
 
