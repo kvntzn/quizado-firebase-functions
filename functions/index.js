@@ -65,8 +65,11 @@ exports.updateRecommendations = functions.firestore.document('QuizList/{quizId}/
         await deleteQueryBatch(db, userRecommendations);
 
         // Score
-        const currentScore = !snap.after.data() ? snap.after.data().correct : 0;
-        const oldScore = !snap.before.data() ? snap.after.data().correct : 0;
+        const currentScore = snap.after.data() ? snap.after.data().correct : 0;
+        let oldScore = 0;
+        if(snap.before.data()){
+            oldScore = snap.before.data().correct;
+        }
 
         const quizList = db.collection('QuizList');
         await quizList.doc(quizId).update({
